@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import bodyParser from "body-parser";
 import express from "express";
 import * as DBUtils from "./DBUtils.js";
+import * as HashUtil from "./hashUtil.js";
 
 dotenv.config();
 const app = express();
@@ -39,18 +40,35 @@ app.post("/register", async (req,res) => {
 });
 
 app.post("/login", async (req,res) => {
-  const promise = DBUtils.getUserByUsername(req.body.username);
-  promise.then((user) => {
-    if(user && user.password === req.body.password) {
+
+  const username = req.body.username;
+  const password = req.body.password;
+  DBUtils.loginUser(username, password)
+  .then((success) => {
+    if(success) {
       res.render("secrets");
     } else {
       res.render("error", {error:"invalid username or password"});
     }
   })
-  .catch(err=> {
+  .catch((err) => {
     console.log(err);
-    res.render("error", {error:err});  
+    res.render("error", {error:err}); 
   });
+
+  // const promise = DBUtils.getUserByUsername(req.body.username);
+  // promise.then((user) => {
+  //   if(user && user.password === md5(req.body.password)) {
+  //     res.render("secrets");
+  //   } else {
+  //     res.render("error", {error:"invalid username or password"});
+  //   }
+  // })
+  // .catch(err=> {
+  //   console.log(err);
+  //   res.render("error", {error:err});  
+  // });
+  
 });
 
 app.get("/logout", (req,res) => {

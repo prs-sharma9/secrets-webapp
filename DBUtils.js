@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import mongoose from "mongoose";
-import encrypt from "mongoose-encryption";
+import * as HashUtil from "./hashUtil.js";
+
 
 dotenv.config();
 
@@ -20,9 +21,6 @@ const userSchema = new mongoose.Schema({
     }
   });
 
-  // enable encryption of password field on schema object
-  userSchema.plugin(encrypt, { secret: SECRET, encryptedFields:["password"] });
-
   const User = mongoose.model(COLLECTION_NAME, userSchema);
 
 export async function connectToDB() {
@@ -30,11 +28,12 @@ export async function connectToDB() {
 }
 
 export async function saveNewUser(username, pass){
+  const hashedPwd = HashUtil.getHash(pass);
   return new Promise((resolve, reject) => {
     getUserByUsername(username)
     .then((foundUser) => {
       if(!foundUser){
-        const newUser = new User({email:username, password:pass});
+        const newUser = new User({email:username, password:hashedPwd});
         resolve(newUser.save());
       } else {
         reject("User already exist");
@@ -49,4 +48,24 @@ export async function saveNewUser(username, pass){
 
 export async function getUserByUsername(username) {
   return User.findOne({email:username}).exec();
+}
+
+export function loginUser(username, pass) {
+
+  const hashedPwd = HashUtil.getHash(pass);
+  return new Promise((resolve, reject) => {
+    getUserByUsername(username)
+    .then((user) => {
+      if(user && user.password === hashedPwd) {
+        resolve(true);
+      } else {
+        reject("invalid username or password");
+      }
+    })
+    .catch(err=> {
+      console.log(err);
+      reject(err);  
+    });
+  });
+
 }
