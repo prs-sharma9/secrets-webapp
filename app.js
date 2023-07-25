@@ -31,7 +31,7 @@ app.get("/login", (req,res) => {
 
 app.post("/register", async (req,res) => {
   const promise = DBUtils.saveNewUser(req.body.username, req.body.password);
-  console.log("9");
+  if(promise === -1) {res.render("error", {error: "Something went horribly wrong"}); } 
   promise.then(() => res.render("secrets"))
   .catch(err=> {
     console.log(err);
@@ -55,20 +55,6 @@ app.post("/login", async (req,res) => {
     console.log(err);
     res.render("error", {error:err}); 
   });
-
-  // const promise = DBUtils.getUserByUsername(req.body.username);
-  // promise.then((user) => {
-  //   if(user && user.password === md5(req.body.password)) {
-  //     res.render("secrets");
-  //   } else {
-  //     res.render("error", {error:"invalid username or password"});
-  //   }
-  // })
-  // .catch(err=> {
-  //   console.log(err);
-  //   res.render("error", {error:err});  
-  // });
-  
 });
 
 app.get("/logout", (req,res) => {

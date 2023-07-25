@@ -8,7 +8,7 @@ dotenv.config();
 const DB_URL = process.env.DB_URL;
 const DB_NAME = process.env.DB_NAME;
 const COLLECTION_NAME = process.env.COLLECTION_NAME;
-var SECRET = process.env.SECRET;
+// var SECRET = process.env.SECRET;
 
 const userSchema = new mongoose.Schema({
     email: {
@@ -28,20 +28,24 @@ export async function connectToDB() {
 }
 
 export async function saveNewUser(username, pass){
-  const hashedPwd = HashUtil.getHash(pass);
   return new Promise((resolve, reject) => {
     getUserByUsername(username)
     .then((foundUser) => {
       if(!foundUser){
-        const newUser = new User({email:username, password:hashedPwd});
-        resolve(newUser.save());
-      } else {
-        reject("User already exist");
+        HashUtil.getHash(pass)
+        .then((hashedPwd) => {
+          if(hashedPwd !== -1) {
+            const newUser = new User({email:username, password:hashedPwd});
+            resolve(newUser.save());
+          } else {
+          reject("User already exist");
+          }
+        })
+        .catch(err => {
+          reject("error while saving new user: " + err);
+        })
       }
     })
-    .catch(err => {
-      console.error("error while saving new user: " + err);
-    });
   });
 }
 
@@ -50,16 +54,16 @@ export async function getUserByUsername(username) {
   return User.findOne({email:username}).exec();
 }
 
-export function loginUser(username, pass) {
+export function loginUser(username, inputPassword) {
 
-  const hashedPwd = HashUtil.getHash(pass);
+  // const hashedPwd = HashUtil.getHash(inputPassword);
   return new Promise((resolve, reject) => {
     getUserByUsername(username)
     .then((user) => {
-      if(user && user.password === hashedPwd) {
-        resolve(true);
-      } else {
-        reject("invalid username or password");
+      if(user) {
+        HashUtil.compareHash(inputPassword, user.password)
+        .then(result => resolve(result))
+        .catch(err => reject("Error while login: "+err))
       }
     })
     .catch(err=> {
