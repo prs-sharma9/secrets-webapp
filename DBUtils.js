@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 import mongoose from "mongoose";
+import passportLocalMongoose from "passport-local-mongoose";
 import * as HashUtil from "./hashUtil.js";
-
 
 dotenv.config();
 
@@ -13,18 +13,19 @@ const COLLECTION_NAME = process.env.COLLECTION_NAME;
 const userSchema = new mongoose.Schema({
     email: {
       type:String,
-      required: true
     },
     password: {
       type:String,
-      required:true
     }
   });
 
-  const User = mongoose.model(COLLECTION_NAME, userSchema);
+  userSchema.plugin(passportLocalMongoose);
+
+ export const User = mongoose.model(COLLECTION_NAME, userSchema);
 
 export async function connectToDB() {
   await mongoose.connect(`${DB_URL}/${DB_NAME}`);
+  console.log("DBUtils: Connected to DB");
 }
 
 export async function saveNewUser(username, pass){
@@ -72,4 +73,17 @@ export function loginUser(username, inputPassword) {
     });
   });
 
+}
+
+
+export function registerNewUser(username, password) {
+
+  return new Promise((resolve, reject) => {
+    User.register(new User({ username : username }), password, function(err, user) {
+      if (err) {
+          reject(err);
+      }
+      resolve(user);
+    });
+  });
 }
