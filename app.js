@@ -1,59 +1,57 @@
-// import dotenv from "dotenv";
 import 'dotenv/config'
 import bodyParser from "body-parser";
 import express from "express";
-import * as DBUtils from "./DBUtils.js";
+import * as dbUtils from "./utils/dbUtils.js";
 
 import session from "express-session";
 import passport from "passport";
 import passportGoogle from "passport-google-oauth20";
 
-// dotenv.config();
+
 const app = express();
 app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(express.static("public"));
-const GoogleStrategy = passportGoogle.Strategy;
+const googleStrategy = passportGoogle.Strategy;
 
 app.use(session({
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false
-  // cookie: {secure: true}
 }));
 
 app.use(passport.initialize());
 app.use(passport.session());
 
+// To support login via email/password enabling LOCAL STRATEGY in passport
+passport.use(dbUtils.User.createStrategy());
 
-passport.use(DBUtils.User.createStrategy());
-
-passport.use(new GoogleStrategy({
-  clientID: process.env.GOOGLE_CLIENT_ID,
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  // userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo",
-  callbackURL: "http://localhost:3000/auth/google/secrets"
-},
-function (accessToken, refreshToken, profile, cb) {
-  console.log("Profile returned from google");
-  DBUtils.findOrCreate({ googleId: profile.id }, function (err, user) {
-    console.log("GoogleStrategy Callback")
-    console.log(err);
-    console.log(user);
-    return cb(err, user);
-  });
-}
+// To login via Google, enabling GOOGLE STRATEGY in passport
+passport.use(new googleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    // userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo",
+    callbackURL: "http://localhost:3000/auth/google/secrets"
+  },
+  function (accessToken, refreshToken, profile, cb) {
+    console.log("Google Response");
+    console.log("displayname " + profile.displayName);
+    console.log("username " + profile.id);
+    const googleUser = new dbUtils.User({
+      username: profile.id,
+      strategy: "google",
+      name: profile.displayName
+    });
+    dbUtils.findOrCreate(googleUser, function (err, user) {
+      return cb(err, user);
+    });
+  }
 ));
 
-// passport.serializeUser(DBUtils.User.serializeUser());
-// passport.deserializeUser(DBUtils.User.deserializeUser());
-
 passport.serializeUser( (user, done) => {
-  console.log("SerializeUser: "+user);
   done(null, user)
 })
 passport.deserializeUser((user, done) => {
-  console.log("deserializeUser: "+user);
   done (null, user)
 })
 
@@ -62,7 +60,7 @@ const PORT = process.env.SERVER_PORT;
 
 app.listen(PORT, () => {
   console.log(`Server started at port: ${PORT}`);
-  DBUtils.connectToDB();
+  dbUtils.connectToDB();
 });
 
 app.get("/", (req, res) => {
@@ -77,34 +75,6 @@ app.get("/login", (req,res) => {
   res.render("login");
 });
 
-// app.post("/register", async (req,res) => {
-//   const promise = DBUtils.saveNewUser(req.body.username, req.body.password);
-//   if(promise === -1) {res.render("error", {error: "Something went horribly wrong"}); } 
-//   promise.then(() => res.render("secrets"))
-//   .catch(err=> {
-//     console.log(err);
-//     res.render("error", {error: err});  
-//   });
-// });
-
-// app.post("/login", async (req,res) => {
-
-//   const username = req.body.username;
-//   const password = req.body.password;
-//   DBUtils.loginUser(username, password)
-//   .then((success) => {
-//     if(success) {
-//       res.render("secrets");
-//     } else {
-//       res.render("error", {error:"invalid username or password"});
-//     }
-//   })
-//   .catch((err) => {
-//     console.log(err);
-//     res.render("error", {error:err}); 
-//   });
-// });
-
 app.get("/logout", (req,res) => {
   req.logout(function(err) {
     if (err) { return next(err); }
@@ -114,18 +84,36 @@ app.get("/logout", (req,res) => {
 
 app.get("/secrets", (req, res) => {
   // check if user is already authenticated
+  let userName = "Guest";
+  
   if(req.isAuthenticated()) {
-    res.render("secrets", {username: req.user.username});
+    userName = req.user.name;
+  } 
+  const postList = dbUtils.findAllPost();
+  postList.then((data) => {
+    const list = [];
+    data.forEach(item => list.push(item.post));
+    res.render("secrets", {username: userName, posts: list});
+  })
+  
+
+  
+
+});
+
+app.get("/submit", (req, res) => {
+  if(req.isAuthenticated()) {
+    res.render("submit");
   } else {
     res.render("login");
   }
-  
 });
+
 
 app.post('/register', function(req, res) {
 
   console.log("register new user");
-  DBUtils.registerNewUser(req.body.username, req.body.password)
+  dbUtils.registerNewUser(req.body.username, req.body.password)
   .then((user) => {
     passport.authenticate('local')(req, res, function () {
       res.redirect('/secrets');
@@ -139,7 +127,7 @@ app.post('/register', function(req, res) {
 
 
 app.post("/login", (req, res) => {
-  const user = new DBUtils.User({
+  const user = new dbUtils.User({
     username: req.body.username,
     password: req.body.password
   });
@@ -156,13 +144,19 @@ app.post("/login", (req, res) => {
   });
 });
 
-// const verify = function (accessToken, refreshToken, profile, cb) {
-//   User.findOrCreate({ googleId: profile.id }, function (err, user) {
-//     return cb(err, user);
-//   });
-// }
-
-
+app.post("/submit", (req, res) => {
+  if(req.isAuthenticated()) {
+    const newPost = new dbUtils.Post({
+      username: req.user.username,
+      post: req.body.secret
+    });
+    dbUtils.savePost(newPost);
+    res.redirect("/secrets");
+  } else {
+    console.log("User not authenticated, cannot post secret. Please login again !")
+    res.render("login");
+  }
+});
 
 app.get("/auth/google",
   passport.authenticate("google", { scope: ["profile"] })

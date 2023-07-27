@@ -12,6 +12,8 @@ const saltRounds = parseInt(process.env.SALT_ROUNDS);
 export function getHash(val) {
   return new Promise((resolve, reject) => {
     bcrypt.hash(val, saltRounds, function(err, hash) {
+      console.log("bcrypt: " + err);
+      console.log("bcrypt: " + hash);
       if(!err) {
         resolve(hash);
       }
