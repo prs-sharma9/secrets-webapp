@@ -1,16 +1,19 @@
-import dotenv from "dotenv";
+// import dotenv from "dotenv";
+import 'dotenv/config'
 import bodyParser from "body-parser";
 import express from "express";
 import * as DBUtils from "./DBUtils.js";
 
 import session from "express-session";
 import passport from "passport";
+import passportGoogle from "passport-google-oauth20";
 
-dotenv.config();
+// dotenv.config();
 const app = express();
 app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(express.static("public"));
+const GoogleStrategy = passportGoogle.Strategy;
 
 app.use(session({
   secret: process.env.SESSION_SECRET,
@@ -25,8 +28,34 @@ app.use(passport.session());
 
 passport.use(DBUtils.User.createStrategy());
 
-passport.serializeUser(DBUtils.User.serializeUser());
-passport.deserializeUser(DBUtils.User.deserializeUser());
+passport.use(new GoogleStrategy({
+  clientID: process.env.GOOGLE_CLIENT_ID,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  // userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo",
+  callbackURL: "http://localhost:3000/auth/google/secrets"
+},
+function (accessToken, refreshToken, profile, cb) {
+  console.log("Profile returned from google");
+  DBUtils.findOrCreate({ googleId: profile.id }, function (err, user) {
+    console.log("GoogleStrategy Callback")
+    console.log(err);
+    console.log(user);
+    return cb(err, user);
+  });
+}
+));
+
+// passport.serializeUser(DBUtils.User.serializeUser());
+// passport.deserializeUser(DBUtils.User.deserializeUser());
+
+passport.serializeUser( (user, done) => {
+  console.log("SerializeUser: "+user);
+  done(null, user)
+})
+passport.deserializeUser((user, done) => {
+  console.log("deserializeUser: "+user);
+  done (null, user)
+})
 
 
 const PORT = process.env.SERVER_PORT;
@@ -121,8 +150,27 @@ app.post("/login", (req, res) => {
       res.render("error", {error:"Invalid Username or Password"})
     } else {
       passport.authenticate('local')(req, res, function () {
-        res.redirect('/secrets');
+        res.redirect("/secrets");
       });
     }
   });
 });
+
+// const verify = function (accessToken, refreshToken, profile, cb) {
+//   User.findOrCreate({ googleId: profile.id }, function (err, user) {
+//     return cb(err, user);
+//   });
+// }
+
+
+
+app.get("/auth/google",
+  passport.authenticate("google", { scope: ["profile"] })
+  );
+
+  app.get("/auth/google/secrets", 
+  passport.authenticate("google", { failureRedirect: "/login" }),
+  function(req, res) {
+    // Successful authentication, redirect home.
+    res.redirect("/secrets");
+  });

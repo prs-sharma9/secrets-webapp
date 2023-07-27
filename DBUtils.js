@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import mongoose from "mongoose";
 import passportLocalMongoose from "passport-local-mongoose";
 import * as HashUtil from "./hashUtil.js";
+import { query } from "express";
 
 dotenv.config();
 
@@ -11,12 +12,9 @@ const COLLECTION_NAME = process.env.COLLECTION_NAME;
 // var SECRET = process.env.SECRET;
 
 const userSchema = new mongoose.Schema({
-    email: {
-      type:String,
-    },
-    password: {
-      type:String,
-    }
+    email: String,
+    password: String,
+    googleId: String
   });
 
   userSchema.plugin(passportLocalMongoose);
@@ -86,4 +84,25 @@ export function registerNewUser(username, password) {
       resolve(user);
     });
   });
+}
+
+export async function findOrCreate(profileCondition, cb) {
+  console.log("findOrCreate: START");
+  console.log(profileCondition);
+  try {
+    let doc = await User.findOne(profileCondition).exec();
+    console.log(doc);
+    if(!doc) {
+      const newUser = new User({
+        googleId:profileCondition.googleId
+      });
+      console.log(`new document: ${newUser}`);
+      doc = await newUser.save();
+      console.log(doc);
+    }
+    cb(null, doc);
+  } catch(err) {
+    cb(err, {});
+  }
+  
 }
